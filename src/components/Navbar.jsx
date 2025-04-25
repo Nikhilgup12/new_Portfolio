@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from '../ThemeProvider';
 import { FaSun, FaMoon, FaGithub, FaLinkedin, FaEnvelope, FaCode } from 'react-icons/fa';
@@ -8,15 +8,28 @@ const Navbar = () => {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeSection, setActiveSection] = useState("home");
+  const [isVisible, setIsVisible] = useState(true);
+  const lastScrollY = useRef(0);
+  const mobileMenuRef = useRef(null);
 
-  // Handle scroll effect and active section
+  // Handle scroll effect, active section, and navbar visibility
   useEffect(() => {
     const handleScroll = () => {
-      setScrolled(window.scrollY > 50);
+      const currentScrollY = window.scrollY;
+      
+      // Handle navbar visibility based on scroll direction
+      if (currentScrollY > lastScrollY.current + 10) {
+        setIsVisible(false); // Scrolling down - hide navbar
+      } else if (currentScrollY < lastScrollY.current - 10) {
+        setIsVisible(true); // Scrolling up - show navbar
+      }
+      
+      lastScrollY.current = currentScrollY;
+      setScrolled(currentScrollY > 50);
       
       // Determine active section
       const sections = document.querySelectorAll('section[id]');
-      const scrollPosition = window.scrollY + 100;
+      const scrollPosition = currentScrollY + 100;
       
       sections.forEach((section) => {
         const sectionTop = section.offsetTop;
@@ -29,10 +42,22 @@ const Navbar = () => {
       });
     };
     
-    window.addEventListener("scroll", handleScroll);
+    window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
   
+  // Close mobile menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target) && menuOpen) {
+        setMenuOpen(false);
+      }
+    };
+    
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [menuOpen]);
+
   const navItems = [
     { name: "Home", href: "#home", icon: "🏠" },
     { name: "About", href: "#about", icon: "👨‍💻" },
@@ -47,13 +72,27 @@ const Navbar = () => {
     e.preventDefault();
     setMenuOpen(false);
     
+    // Get target element
     const targetId = href.substring(1);
     const targetElement = document.getElementById(targetId);
+    
+    // Scroll to element if it exists
     if (targetElement) {
-      window.scrollTo({
-        top: targetElement.offsetTop - 80,
-        behavior: "smooth"
-      });
+      setTimeout(() => {
+        const navHeight = 80; // Approximate navbar height
+        const targetPosition = targetElement.getBoundingClientRect().top + window.pageYOffset;
+        
+        window.scrollTo({
+          top: targetPosition - navHeight,
+          behavior: "smooth"
+        });
+        
+        // Update URL without reloading page
+        window.history.pushState(null, null, href);
+        
+        // Set active section
+        setActiveSection(targetId);
+      }, 100); // Small delay to ensure DOM is ready
     }
   };
 
@@ -63,6 +102,8 @@ const Navbar = () => {
         scrolled 
           ? "bg-white/90 dark:bg-slate-900/90 backdrop-blur-md shadow-lg py-3" 
           : "bg-transparent py-5"
+      } ${
+        isVisible ? "translate-y-0" : "-translate-y-full"
       }`}
     >
       <div className="container mx-auto px-4 flex justify-between items-center">
@@ -222,6 +263,7 @@ const Navbar = () => {
       <AnimatePresence>
         {menuOpen && (
           <motion.div
+            ref={mobileMenuRef}
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
@@ -242,8 +284,8 @@ const Navbar = () => {
                     className={`flex items-center py-3 px-3 text-lg ${
                       activeSection === item.href.substring(1)
                         ? "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 rounded-lg font-medium"
-                        : "text-gray-800 dark:text-gray-200 border-b border-gray-100 dark:border-gray-800"
-                    }`}
+                        : "text-gray-800 dark:text-gray-200"
+                    } border-b border-gray-100 dark:border-gray-800`}
                   >
                     <span className="mr-3 text-xl">{item.icon}</span>
                     {item.name}
